@@ -1,0 +1,10 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "crypto_analysis_agent": "./agent.py:graph",
+    "chat_agent": "./chat_agent.py:chat_graph",
+    "news_agent": "./news_agent.py:news_graph",
+    "research_agent": "./research_agent.py:research_graph"
+  },
+  "env": ".env"
+}
