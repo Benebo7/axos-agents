@@ -17,5 +17,6 @@ COPY . .
 # Expose port
 EXPOSE 8000
 
-# Start LangGraph server
-CMD ["langgraph", "up", "--host", "0.0.0.0", "--port", "8000"]
+# Start LangGraph server using the CLI
+# Use 'langgraph dev' for the development server or run directly with Python
+CMD ["langgraph", "dev", "--host", "0.0.0.0", "--port", "8000", "--no-browser"]
