@@ -1,18 +1,24 @@
 """
 Deep Agent para Chat com o usuário
 """
-from typing import TypedDict, Annotated, List
-from langgraph.graph import StateGraph, START, END
-from langgraph.graph.message import add_messages
+from typing import List
+from typing_extensions import NotRequired, TypedDict
 from deepagents import create_deep_agent
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import BaseMessage
 from tools.market_tools import get_market_tools
 import os
 from dotenv import load_dotenv
 
 # Carregar variáveis de ambiente do .env (incluindo LangSmith tracing)
 load_dotenv()
+
+
+# Schema de contexto customizado para o chat
+class ChatContext(TypedDict):
+    """Campos extras que o BFF envia além das messages"""
+    current_message: NotRequired[str]          # Mensagem atual do usuário
+    mentions: NotRequired[List[dict]]          # Dados da UI anexados pelo usuário
+
 
 # Configuração do modelo usando OpenRouter (igual ao agent.py)
 model = ChatOpenAI(
@@ -45,11 +51,11 @@ chat_agent = create_deep_agent(
     model=model,
     tools=tools,
     system_prompt=CHAT_SYSTEM_PROMPT,
-    name="chat_agent"
+    name="chat_agent",
+    context_schema=ChatContext
 )
 
 # Compilar o grafo
 chat_graph = chat_agent
 
 print("✅ Chat Agent compilado e pronto!")
-

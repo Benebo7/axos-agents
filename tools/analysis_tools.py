@@ -143,27 +143,55 @@ def analyze_opportunities(
     # ATUALIZAR ESTADO DO GRAFO VIA COMMAND
     # ========================================
 
-    stream_progress_event(
-        writer,
-        stage="analyze_opportunities",
-        status="completed",
-        message=f"{len(result_opportunities)} oportunidades identificadas",
-        order=2,
-        total_steps=4,
-        details={"count": len(result_opportunities)},
-    )
+    # Detectar modo de operação
+    mode = state.get("mode", "market_analysis") if state else "market_analysis"
+    is_single_mode = mode == "single_coin_analysis"
 
-    return Command(
-        update={
-            # ✅ CRÍTICO: Atualizar o estado com as oportunidades
-            "opportunities": result_opportunities,
-            # ✅ OBRIGATÓRIO: Incluir ToolMessage na message history
-            "messages": [ToolMessage(
-                content=f"✅ Identificadas {len(result_opportunities)} oportunidades com perfil {risk_profile}. (Salvas no estado)",
-                tool_call_id=tool_call_id
-            )]
-        }
-    )
+    if is_single_mode:
+        # Modo single: retorna objeto único
+        single_opportunity = result_opportunities[0] if result_opportunities else None
+
+        stream_progress_event(
+            writer,
+            stage="analyze_opportunities",
+            status="completed",
+            message=f"Análise de {single_opportunity['coin_symbol'] if single_opportunity else 'N/A'} concluída",
+            order=2,
+            total_steps=2,  # Single mode tem menos steps
+            details={"coin": single_opportunity['coin_symbol'] if single_opportunity else None},
+        )
+
+        return Command(
+            update={
+                "opportunity": single_opportunity,
+                "analysis_complete": True,  # Single mode termina aqui
+                "messages": [ToolMessage(
+                    content=f"✅ Análise de {single_opportunity['coin_symbol'] if single_opportunity else 'N/A'} concluída.",
+                    tool_call_id=tool_call_id
+                )]
+            }
+        )
+    else:
+        # Modo geral: retorna array
+        stream_progress_event(
+            writer,
+            stage="analyze_opportunities",
+            status="completed",
+            message=f"{len(result_opportunities)} oportunidades identificadas",
+            order=2,
+            total_steps=4,
+            details={"count": len(result_opportunities)},
+        )
+
+        return Command(
+            update={
+                "opportunities": result_opportunities,
+                "messages": [ToolMessage(
+                    content=f"✅ Identificadas {len(result_opportunities)} oportunidades com perfil {risk_profile}. (Salvas no estado)",
+                    tool_call_id=tool_call_id
+                )]
+            }
+        )
 
 
 @tool

@@ -2,22 +2,16 @@
 Deep Agent para Análise de Criptomoedas
 Usa LangGraph com streaming para UI em tempo real
 """
-from typing import List, Dict, Any, Annotated, Sequence
+from typing import List, Annotated, Sequence
 from typing_extensions import NotRequired
 from langchain.agents import create_agent, AgentState
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import AIMessage, BaseMessage
-from langgraph.graph import END
+from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
-from langgraph.types import Command
 
 from tools.market_tools import get_market_tools
 from tools.analysis_tools import get_analysis_tools
-from tools.report_tools import (
-    generate_executive_report,
-    load_baseline_report,
-    compare_with_baseline
-)
+from tools.report_tools import generate_executive_report
 import os
 from dotenv import load_dotenv
 
@@ -26,31 +20,88 @@ load_dotenv()
 
 # Estado do agente - DEVE estender AgentState
 class AnalysisState(AgentState):
-    """Estado do agente de análise com campos customizados"""
-    # ✅ Garante que o histórico de mensagens seja preservado (append)
+    """
+    Estado do agente de análise com campos customizados.
+    Suporta 2 modos: market_analysis, single_coin_analysis
+    """
+
+    # ========================================
+    # COMUM (todos os modos)
+    # ========================================
     messages: Annotated[Sequence[BaseMessage], add_messages]
-    
-    # Campos customizados (NotRequired para não serem obrigatórios no invoke)
-    user_id: NotRequired[str]
-    period: NotRequired[str]
-    risk_profile: NotRequired[str]
-    capital: NotRequired[float]
-    mode: NotRequired[str]
-    coin_id: NotRequired[str]
-    
-    # ✅ Dados principais
+    mode: NotRequired[str]  # 'market_analysis' | 'single_coin_analysis'
+
+    # ========================================
+    # MODO: single_coin_analysis
+    # ========================================
+    coin_id: NotRequired[str]   # ex: 'bitcoin', 'ethereum'
+    period: NotRequired[str]    # ex: '7d', '30d', '90d'
+
+    # ========================================
+    # MODO: market_analysis
+    # ========================================
+    user_profile: NotRequired[dict]
+    # {
+    #   experience: str,           # nível de experiência
+    #   riskTolerance: str,        # perfil de risco
+    #   objectives: str,           # objetivo geral
+    #   volatilityReaction: str,   # reação a volatilidade
+    #   financialHealth: str,      # saúde financeira
+    #   raw: dict                  # questionário completo
+    # }
+
+    analysis_context: NotRequired[dict]
+    # {
+    #   timeHorizon: str,                  # horizonte de tempo
+    #   objective: str,                    # objetivo específico
+    #   capital: float,                    # capital a investir
+    #   capitalRepresentationPercent: int  # % do patrimônio
+    # }
+
+    portfolio: NotRequired[dict]
+    # {
+    #   assets: [{ coin_id, amount, price_usd }]
+    # }
+
+    # ========================================
+    # SAÍDA: single_coin_analysis
+    # ========================================
+    opportunity: NotRequired[dict]
+    # {
+    #   opportunity_id: str,
+    #   coin_id: str,
+    #   coin_symbol: str,
+    #   coin_name: str,
+    #   confidence: float,
+    #   tag: str,
+    #   reason: str,
+    #   analysis: str,
+    #   entry_price: float,
+    #   target_price: float,
+    #   stop_loss: float,
+    #   risk_level: str,
+    #   timeframe: str
+    # }
+
+    # ========================================
+    # SAÍDA: market_analysis
+    # ========================================
     market_data: NotRequired[List[dict]]
     opportunities: NotRequired[List[dict]]
     tasks: NotRequired[List[dict]]
     allocation: NotRequired[dict]
-    analysis_complete: NotRequired[bool]
+    executive_report: NotRequired[dict]
+    # {
+    #   executive_summary: str,
+    #   market_context: str,
+    #   key_insights: List[str],
+    #   warnings: List[str]
+    # }
 
-    # Campos para reports
-    executive_report: NotRequired[dict]  # { executive_summary, market_context, key_insights, warnings }
-    baseline_requested: NotRequired[bool]
-    baseline_report_id: NotRequired[str]
-    baseline_data: NotRequired[dict]  # Injetado pelo frontend
-    comparison: NotRequired[dict]  # Resultado de compare_with_baseline
+    # ========================================
+    # COMUM (flag de conclusão)
+    # ========================================
+    analysis_complete: NotRequired[bool]
 
 # Configuração do modelo usando OpenRouter
 model = ChatOpenAI(
@@ -71,7 +122,7 @@ SYSTEM_PROMPT = """Você é um agente especializado em análise de criptomoedas.
 - Apenas chame as tools na ordem correta, sem passar os dados gerados anteriormente como argumentos.
 
 **VERIFIQUE O MODO DE OPERAÇÃO NO ESTADO:**
-`mode` pode ser "market_analysis" (Geral), "single_coin_analysis" (Ativo Único) ou "follow_up_analysis" (Follow-Up).
+`mode` pode ser "market_analysis" (Geral) ou "single_coin_analysis" (Ativo Único).
 
 ---
 
@@ -115,54 +166,11 @@ Siga este fluxo se `coin_id` estiver preenchido (ex: "bitcoin"):
    get_coin_details(coin_id=state["coin_id"])
    ```
 
-2️⃣ **Analisar o ativo**
+2️⃣ **Analisar o ativo** (FINALIZA AUTOMATICAMENTE)
    ```python
-   analyze_opportunities(risk_profile=state["risk_profile"])
-   # ✅ A tool deve ser capaz de identificar se há dados de moeda única ou usar o retorno de get_coin_details
-   ```
-
-3️⃣ **Gerar Insights (Tarefas)**
-   ```python
-   generate_tasks(capital=state["capital"])
-   ```
-
-4️⃣ **FINALIZAR: Gerar relatório executivo** (OBRIGATÓRIO)
-   Você DEVE chamar esta ferramenta para completar a análise.
-   Não passe argumentos.
-   ```python
-   generate_executive_report()
-   ```
-
----
-
-### 🅲 MODO FOLLOW-UP (mode="follow_up_analysis")
-Siga este fluxo quando baseline_report_id estiver preenchido:
-
-1️⃣ **Carregar análise baseline**
-   ```python
-   load_baseline_report(baseline_report_id=state["baseline_report_id"])
-   ```
-
-2️⃣ **Buscar dados atuais do mercado**
-   ```python
-   fetch_market_data()
-   ```
-
-3️⃣ **Comparar com baseline**
-   ```python
-   compare_with_baseline()
-   ```
-
-4️⃣ **Gerar tarefas baseadas na comparação**
-   ```python
-   generate_tasks(capital=state["capital"])
-   ```
-
-5️⃣ **FINALIZAR: Gerar relatório executivo** (OBRIGATÓRIO)
-   Você DEVE chamar esta ferramenta para completar a análise.
-   Não passe argumentos.
-   ```python
-   generate_executive_report()
+   analyze_opportunities()
+   # ✅ Retorna `opportunity` (objeto único) e marca analysis_complete=True
+   # ✅ NÃO chame generate_tasks, create_allocation ou generate_executive_report
    ```
 
 ---
@@ -171,8 +179,8 @@ Siga este fluxo quando baseline_report_id estiver preenchido:
 ✅ NÃO invente dados. Use as tools.
 ✅ NÃO passe JSONs gigantes como argumento. Confie no estado.
 ✅ Se uma tool falhar, tente recuperar ou notificar o erro.
-✅ A ÚLTIMA AÇÃO DEVE SER `generate_executive_report`.
-✅ Termine chamando `generate_executive_report` quando todos os dados estiverem prontos.
+✅ MODO GERAL: A última ação DEVE SER `generate_executive_report`.
+✅ MODO SINGLE: A última ação é `analyze_opportunities` (finaliza automaticamente).
 """
 
 # Ferramentas disponíveis
@@ -180,8 +188,6 @@ tools = [
     *get_market_tools(),
     *get_analysis_tools(),
     generate_executive_report,
-    load_baseline_report,
-    compare_with_baseline,
 ]
 
 # Criar agent com state_schema para persistir estado customizado
