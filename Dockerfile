@@ -17,6 +17,9 @@ COPY . .
 # Expose port
 EXPOSE 8000
 
-# Start LangGraph server using the CLI
-# Use 'langgraph dev' for the development server or run directly with Python
-CMD ["langgraph", "dev", "--host", "0.0.0.0", "--port", "8000", "--no-browser"]
+# Configuração de concorrência (padrão: 2 execuções simultâneas)
+ENV MAX_CONCURRENT_EXECUTIONS=2
+
+# Usar nosso server customizado com controle de concorrência
+# Em vez de: langgraph dev --host 0.0.0.0 --port 8000 --no-browser
+CMD ["python", "server.py"]

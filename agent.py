@@ -206,3 +206,4 @@ graph = agent
 
 print("✅ Agent compilado e pronto!")
 print(f"📋 Tools disponíveis: {[t.name for t in tools]}")
+print(f"🔒 Limite de concorrência ativo via execution_limiter (env: MAX_CONCURRENT_EXECUTIONS)")

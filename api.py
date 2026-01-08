@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from scheduler import scheduler
+from execution_limiter import get_stats
 import uuid
 
 app = FastAPI()
@@ -67,6 +68,16 @@ def get_results(automation_id: str):
             all_results = json.load(f)
             return all_results.get(automation_id, [])
     return []
+
+@app.get("/health")
+def health_check():
+    """Health check + status do semaphore de concorrência."""
+    stats = get_stats()
+    return {
+        "status": "healthy",
+        "concurrency": stats,
+    }
+
 
 @app.on_event("startup")
 def startup_event():

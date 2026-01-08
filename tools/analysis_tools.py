@@ -27,7 +27,7 @@ def analyze_opportunities(
     com as oportunidades identificadas via Command.
 
     Args:
-        market_data_json: (Opcional/Deprecado) Dados do mercado. 
+        market_data_json: (Opcional/Deprecado) Dados do mercado.
                          PREFERENCIALMENTE usa state['market_data'].
         risk_profile: Perfil de risco ("conservative", "moderate", "aggressive")
 
@@ -36,7 +36,7 @@ def analyze_opportunities(
     """
     print("🔍 analyze_opportunities iniciado")
     print(f"   tool_call_id: {tool_call_id}")
-    
+
     # ✅ Obter stream writer para streaming em tempo real
     writer = get_stream_writer_safe()
     stream_progress_event(
